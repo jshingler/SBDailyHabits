@@ -1,0 +1,17 @@
+# log4rs.yaml
+appenders:
+  stdout:
+    kind: console
+    encoder:
+      pattern: "{d} [{l}] - {m}{n}"
+  file:
+    kind: file
+    path: "app.log"
+    encoder:
+      pattern: "{d} [{l}] - {m}{n}"
+
+root:
+  level: info
+  appenders:
+    - stdout
+    - file

@@ -1,0 +1,18 @@
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde-java-properties = "0.2.0"
+serde = { version = "1.0.210", features = ["derive"] }
+#hyper = {  version = "1.4.1", features = ["full"] }
+log4rs = "1.3.0"
+log = "0.4.22"
+once_cell = "1.20.1"
+serde_json = "1.0.128"
+#tokio = {  version = "1.40.0", features = ["full"] }
+reqwest = { version = "0.12.8", features = ["blocking", "json"] }
+chrono = "0.4.38"
+#http-body-util = "0.1.2"
+#hyper-util = {  version = "0.1.9", features = ["full"] }
