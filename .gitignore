@@ -1,0 +1,7 @@
+/target
+
+# Local config — contains secrets, never commit
+.env
+
+# Old config format (replaced by .env)
+config/config.properties

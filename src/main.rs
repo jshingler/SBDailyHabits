@@ -30,21 +30,21 @@ fn main() -> Result<()> {
     // `%` formats using Display (like {}), `?` uses Debug (like {:?}).
     // The message string comes last — fields are searchable metadata.
     info!(
-        app_name = %config::CONFIG.app.name,
-        app_version = %config::CONFIG.app.version,
+        app_name = %config::CONFIG.app_name,
+        app_version = %config::CONFIG.app_version,
         "Starting SBDailyHabits"
     );
 
     // Build a NotionClient from the global config. In production this always
     // comes from CONFIG; in tests a mock client pointing at a local server is used.
     let notion = NotionClient::new(
-        &config::CONFIG.notion.url,
-        &config::CONFIG.notion.token,
-        &config::CONFIG.notion.version,
-        &config::CONFIG.notion.daily_database_id,
-        &config::CONFIG.notion.habits_master_database_id,
-        &config::CONFIG.notion.habits_database_id,
-        &config::CONFIG.notion.daily_stats_page_id,
+        &config::CONFIG.notion_url,
+        &config::CONFIG.notion_token,
+        &config::CONFIG.notion_version,
+        &config::CONFIG.daily_database_id,
+        &config::CONFIG.habits_master_database_id,
+        &config::CONFIG.habits_database_id,
+        &config::CONFIG.daily_stats_page_id,
     );
 
     let todays_id = daily_tracking::get_today_id(&notion)?;

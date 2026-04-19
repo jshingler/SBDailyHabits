@@ -1,0 +1,61 @@
+# GitHub Actions CI pipeline for SBDailyHabits.
+#
+# GitHub Actions is a CI/CD system built into GitHub. A "workflow" is a YAML
+# file that defines a series of steps to run automatically on events like push
+# or pull request. Each step runs in an isolated Ubuntu VM provided by GitHub.
+#
+# This workflow:
+#   1. Runs `cargo test` — verifies all 38 tests pass
+#   2. Runs `cargo clippy` — catches common Rust mistakes and style issues
+#
+# If either step fails, GitHub blocks the PR and shows a red X on the commit.
+
+name: CI
+
+# Trigger this workflow on any push or PR targeting main.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-lint:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repository code into the runner VM.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Install the Rust toolchain. `stable` means the latest stable release.
+      # The `components` field adds clippy (the linter).
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # Cache cargo's registry and compiled dependencies between runs.
+      # Without this, every CI run downloads and compiles all dependencies
+      # from scratch — which takes 2-3 minutes. With the cache, repeat runs
+      # only recompile code that actually changed.
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # Install OpenSSL dev headers — required by the `openssl-sys` crate
+      # which is a transitive dependency of `reqwest`.
+      - name: Install OpenSSL
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+
+      # Run the full test suite. `-D warnings` turns any compiler warning into
+      # an error so warnings can't silently accumulate over time.
+      - name: Run tests
+        run: cargo test
+        env:
+          RUST_LOG: info
+
+      # Run clippy — Rust's official linter. `-D warnings` makes it fail the
+      # build if it finds anything, preventing lint debt from building up.
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
