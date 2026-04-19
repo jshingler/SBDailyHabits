@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use serde_java_properties::from_reader;
 use std::fs::File;
-use std::error::Error;
 use std::io::Read;
+use crate::error::HabitsError;
 
 // `once_cell::Lazy` lets us initialize a value exactly once, the first time it's
 // accessed, and then reuse it everywhere. This is Rust's answer to a global
@@ -74,13 +74,15 @@ pub struct Config {
 
 // Accepts any `Read` impl (File, Cursor<&[u8]>, etc.) so this function is
 // testable without touching the filesystem.
-pub fn parse_config<R: Read>(reader: R) -> Result<Config, Box<dyn Error>> {
-    let config: Config = from_reader(reader)?;
+pub fn parse_config<R: Read>(reader: R) -> Result<Config, HabitsError> {
+    let config: Config = from_reader(reader)
+        .map_err(|e| HabitsError::Config(e.to_string()))?;
     Ok(config)
 }
 
-fn load_config() -> Result<Config, Box<dyn Error>> {
-    let file = File::open("config/config.properties")?;
+fn load_config() -> Result<Config, HabitsError> {
+    let file = File::open("config/config.properties")
+        .map_err(|e| HabitsError::Config(e.to_string()))?;
     parse_config(file)
 }
 
