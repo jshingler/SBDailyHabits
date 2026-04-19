@@ -1,11 +1,11 @@
-use log::info;
+use tracing::info;
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use crate::notion_client::NotionClient;
 use crate::error::HabitsError;
 
 pub fn get_hmd(notion: &NotionClient) -> Result<Vec<(String, String)>, HabitsError> {
-    info!("Get Habits Master Data -- Start");
+    info!("Fetching active habits from Notion");
 
     let query = json!({
         "filter": {
@@ -53,8 +53,7 @@ pub fn get_hmd(notion: &NotionClient) -> Result<Vec<(String, String)>, HabitsErr
 
     let habits = parse_habits_response(&result_json)?;
 
-    info!("Loaded {} active habits", habits.len());
-    info!("Get Habits Master Data -- End");
+    info!(count = habits.len(), "Loaded active habits");
 
     Ok(habits)
 }

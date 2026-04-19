@@ -4,16 +4,36 @@ use sb_daily_habits::notion_client::NotionClient;
 use sb_daily_habits::daily_tracking;
 use sb_daily_habits::habits_md;
 use sb_daily_habits::daily_habits::{self, habit_exists_today};
-use log::info;
+
+// `tracing` is a structured logging framework. Unlike the `log` crate which
+// only accepts string messages, tracing lets you attach typed key=value fields
+// to each log event. Those fields can be queried, filtered, and exported to
+// observability tools (Datadog, Jaeger, etc.) without parsing strings.
+use tracing::info;
 
 type Result<T> = std::result::Result<T, HabitsError>;
 
 fn main() -> Result<()> {
-    log4rs::init_file("config/log4rs.yaml", Default::default())
-        .map_err(|e| HabitsError::Config(e.to_string()))?;
+    // `tracing_subscriber::fmt()` sets up a human-readable console subscriber.
+    // It reads the RUST_LOG environment variable to control the log level, e.g.:
+    //   RUST_LOG=info cargo run   → shows info and above
+    //   RUST_LOG=debug cargo run  → shows everything
+    // This replaces the log4rs.yaml file — no external config file needed.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
 
-    info!("App Name: {}", &config::CONFIG.app.name);
-    info!("App Version: {}", &config::CONFIG.app.version);
+    // Structured fields use `field = %value` syntax.
+    // `%` formats using Display (like {}), `?` uses Debug (like {:?}).
+    // The message string comes last — fields are searchable metadata.
+    info!(
+        app_name = %config::CONFIG.app.name,
+        app_version = %config::CONFIG.app.version,
+        "Starting SBDailyHabits"
+    );
 
     // Build a NotionClient from the global config. In production this always
     // comes from CONFIG; in tests a mock client pointing at a local server is used.
@@ -35,7 +55,7 @@ fn main() -> Result<()> {
         // This prevents duplicates when the program is run more than once per day.
         match habit_exists_today(&notion, &habit_id, &todays_id) {
             Ok(true) => {
-                info!("Skipping '{}' — entry already exists for today", habit_name);
+                info!(habit = %habit_name, "Skipping — entry already exists for today");
             }
             Ok(false) => {
                 if let Err(e) = daily_habits::create_daily_habit(&notion, &habit_id, &todays_id, &habit_name) {

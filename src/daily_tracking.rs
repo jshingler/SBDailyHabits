@@ -1,4 +1,4 @@
-use log::info;
+use tracing::info;
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -75,7 +75,7 @@ pub fn parse_today_id(json: &str) -> Result<String, HabitsError> {
         .id
         .clone();
 
-    info!("Today's Notion page ID: {}", today_id);
+    info!(page_id = %today_id, "Found today's Notion page");
     Ok(today_id)
 }
 

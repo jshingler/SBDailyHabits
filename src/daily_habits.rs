@@ -1,4 +1,4 @@
-use log::info;
+use tracing::info;
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use crate::notion_client::NotionClient;
@@ -11,8 +11,10 @@ pub fn create_daily_habit(
     habit_name: &str,
 ) -> Result<(), HabitsError> {
     info!(
-        "create_daily_habit(habit_id: {}, today_id: {}, habit_name: {})",
-        habit_id, today_id, habit_name
+        habit_id = %habit_id,
+        today_id = %today_id,
+        habit_name = %habit_name,
+        "Creating daily habit entry"
     );
 
     let query = build_create_habit_query(
@@ -44,7 +46,7 @@ pub fn create_daily_habit(
         });
     }
 
-    info!("Response: {}", result_json);
+    info!(response = %result_json, "Habit entry created");
     Ok(())
 }
 
