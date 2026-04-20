@@ -1,6 +1,7 @@
 use tracing::info;
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use crate::notion_client::NotionClient;
 use crate::error::HabitsError;
 
@@ -101,6 +102,70 @@ pub fn habit_exists_today(
     }
 
     parse_habit_exists(&result_json)
+}
+
+// Batch idempotency check: fetches ALL habit entries for today in one API call
+// and returns the set of habit IDs that already have entries. Call this once
+// before the loop instead of calling `habit_exists_today` per habit — reduces
+// N API calls down to 1.
+pub fn get_existing_habit_ids_today(
+    notion: &NotionClient,
+    today_id: &str,
+) -> Result<HashSet<String>, HabitsError> {
+    let query = json!({
+        "filter": {
+            "property": "Day",
+            "relation": { "contains": today_id }
+        }
+    });
+
+    let url = format!(
+        "{}/databases/{}/query",
+        notion.base_url, notion.habits_database_id
+    );
+
+    let http_client = Client::new();
+    let response = http_client
+        .post(&url)
+        .header("Authorization", &notion.token)
+        .header("Notion-Version", &notion.version)
+        .header("Content-Type", "application/json")
+        .json(&query)
+        .send()?;
+
+    let status = response.status();
+    let result_json = response.text()?;
+
+    if !status.is_success() {
+        return Err(HabitsError::NotionApi {
+            status: status.as_u16(),
+            body: result_json,
+        });
+    }
+
+    parse_existing_habit_ids(&result_json)
+}
+
+// Pure function: extracts the set of Habit relation IDs from a Daily Habits
+// query response. Each entry's "Habit" relation array contains the habit page ID.
+pub fn parse_existing_habit_ids(json: &str) -> Result<HashSet<String>, HabitsError> {
+    let v: Value = serde_json::from_str(json)?;
+    let results = v["results"]
+        .as_array()
+        .ok_or(HabitsError::MissingResultsArray)?;
+
+    let ids = results
+        .iter()
+        .filter_map(|entry| {
+            entry["properties"]["Habit"]["relation"]
+                .as_array()?
+                .first()?["id"]
+                .as_str()
+                .map(String::from)
+        })
+        .collect();
+
+    Ok(ids)
 }
 
 // Pure function: checks whether the Notion response contains any results.
@@ -219,8 +284,50 @@ mod tests {
 
     #[test]
     fn test_parse_habit_exists_errors_on_invalid_json() {
-        // Verifies that malformed JSON produces an error, not a panic.
         let result = parse_habit_exists("{ not valid json");
+        assert!(result.is_err());
+    }
+
+    // ── Batch idempotency: parse_existing_habit_ids ───────────────────────────
+
+    #[test]
+    fn test_parse_existing_habit_ids_returns_ids() {
+        let json = r#"{
+            "results": [
+                { "properties": { "Habit": { "relation": [{ "id": "habit-aaa" }] } } },
+                { "properties": { "Habit": { "relation": [{ "id": "habit-bbb" }] } } }
+            ]
+        }"#;
+        let ids = parse_existing_habit_ids(json).expect("Should parse");
+        assert!(ids.contains("habit-aaa"));
+        assert!(ids.contains("habit-bbb"));
+        assert_eq!(ids.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_existing_habit_ids_returns_empty_for_no_results() {
+        let json = r#"{ "results": [] }"#;
+        let ids = parse_existing_habit_ids(json).expect("Should parse");
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn test_parse_existing_habit_ids_skips_entries_without_habit_relation() {
+        // Entries with empty or missing Habit relation should be silently skipped.
+        let json = r#"{
+            "results": [
+                { "properties": { "Habit": { "relation": [] } } },
+                { "properties": { "Habit": { "relation": [{ "id": "habit-ccc" }] } } }
+            ]
+        }"#;
+        let ids = parse_existing_habit_ids(json).expect("Should parse");
+        assert_eq!(ids.len(), 1);
+        assert!(ids.contains("habit-ccc"));
+    }
+
+    #[test]
+    fn test_parse_existing_habit_ids_errors_on_invalid_json() {
+        let result = parse_existing_habit_ids("{ not valid json");
         assert!(result.is_err());
     }
 }

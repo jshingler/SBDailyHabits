@@ -3,7 +3,7 @@ use sb_daily_habits::error::HabitsError;
 use sb_daily_habits::notion_client::NotionClient;
 use sb_daily_habits::daily_tracking;
 use sb_daily_habits::habits_md;
-use sb_daily_habits::daily_habits::{self, habit_exists_today};
+use sb_daily_habits::daily_habits::{self, get_existing_habit_ids_today};
 
 // `tracing` is a structured logging framework. Unlike the `log` crate which
 // only accepts string messages, tracing lets you attach typed key=value fields
@@ -50,21 +50,17 @@ fn main() -> Result<()> {
     let todays_id = daily_tracking::get_today_id(&notion)?;
     let habits = habits_md::get_hmd(&notion)?;
 
+    // Fetch all existing habit entries for today in a single API call, then
+    // check membership in memory. This replaces one Notion query per habit
+    // (O(N) API calls) with one batch query regardless of how many habits exist.
+    let existing_ids = get_existing_habit_ids_today(&notion, &todays_id)?;
+    info!(count = existing_ids.len(), "Loaded existing habit entries for today");
+
     for (habit_id, habit_name) in habits {
-        // Idempotency check: skip if today's entry already exists for this habit.
-        // This prevents duplicates when the program is run more than once per day.
-        match habit_exists_today(&notion, &habit_id, &todays_id) {
-            Ok(true) => {
-                info!(habit = %habit_name, "Skipping — entry already exists for today");
-            }
-            Ok(false) => {
-                if let Err(e) = daily_habits::create_daily_habit(&notion, &habit_id, &todays_id, &habit_name) {
-                    eprintln!("Failed to create habit '{}': {}", habit_name, e);
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to check existence for '{}': {}", habit_name, e);
-            }
+        if existing_ids.contains(&habit_id) {
+            info!(habit = %habit_name, "Skipping — entry already exists for today");
+        } else if let Err(e) = daily_habits::create_daily_habit(&notion, &habit_id, &todays_id, &habit_name) {
+            eprintln!("Failed to create habit '{}': {}", habit_name, e);
         }
     }
 
