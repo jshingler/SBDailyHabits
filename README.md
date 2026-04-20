@@ -126,6 +126,20 @@ This logs all output (stdout and stderr) to `~/.local/share/sbdailyhabits/run.lo
 mkdir -p ~/.local/share/sbdailyhabits
 ```
 
+To view the latest run:
+
+```bash
+tail -50 ~/.local/share/sbdailyhabits/run.log
+```
+
+**Gotcha: cron doesn't load your shell profile.** `RUST_LOG` won't be set unless you add it explicitly in the crontab:
+
+```
+0 7 * * * RUST_LOG=info /path/to/SBDailyHabits/scripts/run.sh >> ~/.local/share/sbdailyhabits/run.log 2>&1
+```
+
+Without it the binary defaults to `info` level anyway, so logging still works — but if you've customized `RUST_LOG` in your shell profile, cron won't pick it up.
+
 ## Testing
 
 ```bash
