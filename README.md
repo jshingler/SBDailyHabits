@@ -36,50 +36,94 @@ src/
 └── daily_habits.rs    # Creates daily habit entries in Notion
 tests/
 └── notion_integration.rs  # Wiremock integration tests
+scripts/
+├── setup.sh           # One-time interactive configuration
+└── run.sh             # Daily run wrapper (loads config + keychain token)
 ```
 
-## Configuration
+## Setup
 
-Copy `.env.example` to `.env` and fill in your values:
+### 1. Build the binary
 
 ```bash
-cp .env.example .env
+cargo build --release
 ```
 
-```env
-APP_NAME=SBDailyHabits
-APP_VERSION=1.0.0
+The binary is written to `target/release/sb-daily-habits`.
 
-DATABASE_USER=
-DATABASE_PASSWORD=
-DATABASE_HOST=
-DATABASE_PORT=5432
+### 2. Run the setup script
 
-NOTION_TOKEN=secret_YOUR_TOKEN_HERE
-NOTION_URL=https://api.notion.com/v1
-NOTION_VERSION=2022-06-28
+`scripts/setup.sh` is an interactive one-time configurator. It prompts for all required values and lets you choose how to store the Notion API token:
 
-DAILY_DATABASE_ID=your-daily-tracking-db-id
-HABITS_DATABASE_ID=your-daily-habits-db-id
-HABITS_MASTER_DATABASE_ID=your-habits-master-db-id
-DAILY_STATS_PAGE_ID=your-daily-stats-page-id
+```bash
+./scripts/setup.sh
 ```
 
-Your Notion API token can be created at [notion.so/my-integrations](https://www.notion.so/my-integrations). The database IDs are the UUIDs found in each database's Notion URL.
+**Option 1 — Restricted `.env` file** *(simpler)*
+Writes all config including the token to `~/.config/sbdailyhabits/.env` with `chmod 600`. The token is on disk but only readable by your user.
 
-The `.env` file is listed in `.gitignore` and will never be committed.
+**Option 2 — OS keychain** *(recommended)*
+Stores the Notion token in the system keychain (GNOME Keyring on Linux) via `secret-tool` — the token never touches disk as plaintext. The `.env` file is written without the token; `run.sh` injects it from the keychain at runtime.
+
+To use Option 2, `secret-tool` must be installed:
+```bash
+sudo apt-get install -y libsecret-tools
+```
+
+Config is written to `~/.config/sbdailyhabits/.env`. This file is outside the project directory and will never be committed.
+
+### Configuration values
+
+| Variable | Description |
+|---|---|
+| `APP_NAME` | Application name (e.g. `SBDailyHabits`) |
+| `APP_VERSION` | Application version (e.g. `1.0.0`) |
+| `DATABASE_*` | Postgres connection details (reserved for future use) |
+| `NOTION_TOKEN` | API token from [notion.so/my-integrations](https://www.notion.so/my-integrations) |
+| `NOTION_URL` | Notion API base URL (`https://api.notion.com/v1`) |
+| `NOTION_VERSION` | Notion API version (`2022-06-28`) |
+| `DAILY_DATABASE_ID` | UUID of your Daily Tracking database |
+| `HABITS_DATABASE_ID` | UUID of your Daily Habits database |
+| `HABITS_MASTER_DATABASE_ID` | UUID of your Habits Master database |
+| `DAILY_STATS_PAGE_ID` | UUID of your Daily Stats page |
+
+Database and page IDs are the UUIDs found in each Notion page's URL.
 
 ## Running
 
+### Manually
+
 ```bash
-cargo run
+./scripts/run.sh
 ```
+
+`run.sh` loads `~/.config/sbdailyhabits/.env`, injects `NOTION_TOKEN` from the OS keychain if available, then executes the binary. It falls back gracefully to the token in `.env` if the keychain is unavailable.
 
 Control log verbosity with `RUST_LOG`:
 
 ```bash
-RUST_LOG=debug cargo run   # show all log output
-RUST_LOG=info cargo run    # show info and above (default)
+RUST_LOG=debug ./scripts/run.sh   # show all log output
+RUST_LOG=info ./scripts/run.sh    # show info and above (default)
+```
+
+### Automated daily run via cron
+
+To run automatically every morning at 7am, add a cron entry:
+
+```bash
+crontab -e
+```
+
+Add this line (adjust the path to match where you cloned the repo):
+
+```
+0 7 * * * /path/to/SBDailyHabits/scripts/run.sh >> ~/.local/share/sbdailyhabits/run.log 2>&1
+```
+
+This logs all output (stdout and stderr) to `~/.local/share/sbdailyhabits/run.log`. Create the log directory first:
+
+```bash
+mkdir -p ~/.local/share/sbdailyhabits
 ```
 
 ## Testing
