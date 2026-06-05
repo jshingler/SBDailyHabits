@@ -4,6 +4,7 @@ use sb_daily_habits::notion_client::NotionClient;
 use sb_daily_habits::daily_tracking;
 use sb_daily_habits::habits_md;
 use sb_daily_habits::daily_habits::{self, get_existing_habit_ids_today};
+use sb_daily_habits::retry::with_retry;
 
 // `tracing` is a structured logging framework. Unlike the `log` crate which
 // only accepts string messages, tracing lets you attach typed key=value fields
@@ -47,13 +48,15 @@ fn main() -> Result<()> {
         &config::CONFIG.daily_stats_page_id,
     );
 
-    let todays_id = daily_tracking::get_today_id(&notion)?;
-    let habits = habits_md::get_hmd(&notion)?;
+    let todays_id = with_retry("get_today_id", || daily_tracking::get_today_id(&notion))?;
+    let habits = with_retry("get_hmd", || habits_md::get_hmd(&notion))?;
 
     // Fetch all existing habit entries for today in a single API call, then
     // check membership in memory. This replaces one Notion query per habit
     // (O(N) API calls) with one batch query regardless of how many habits exist.
-    let existing_ids = get_existing_habit_ids_today(&notion, &todays_id)?;
+    let existing_ids = with_retry("get_existing_habit_ids_today", || {
+        get_existing_habit_ids_today(&notion, &todays_id)
+    })?;
     info!(count = existing_ids.len(), "Loaded existing habit entries for today");
 
     for (habit_id, habit_name) in habits {
